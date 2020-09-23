@@ -3,6 +3,7 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize
+from scipy.signal import find_peaks
 
 def linear_fit(x, y0, a):
 
@@ -49,13 +50,15 @@ def reader(dirName):
     energy = np.empty([], dtype = float)
     intensity = np.empty([], dtype = float)
     y_err = np.empty([], dtype = float)
-    y_max = []
+    y_max = np.empty((0,file_numb), dtype = float)
 
     for k in range(0, file_numb):
         for i in range(0, lines[k]):
-            temp.append(imps[k, i]*int_time/(1-tau*imps[k, i]*int_time))
-            temp1.append(h*c/(2*d*np.sin(angle[k, i]*np.pi/180)*1000))
-        intensity = np.append(intensity, temp)
+            temp.append(float(imps[k, i]*int_time/(1-tau*imps[k, i]*int_time)))
+            temp1.append(float(h*c/(2*d*np.sin(angle[k, i]*np.pi/180)*1000)))
+        y_max = np.append(y_max, max(temp))
+        #print(max(temp), "numpy values ", y_max[k])
+        intensity = np.append(intensity, temp/y_max[k])
         energy = np.append(energy, temp1)
         temp.clear()
         temp1.clear()
@@ -66,17 +69,19 @@ def reader(dirName):
     #    for i in range(0, lines[k]):
     #        temp.append(imps[k, i])
     #        temp1.append(angle[k, i])
-    #    intensity = np.append(intensity, temp)
+    #    y_max = np.append(y_max, max(temp))
+    #    intensity = np.append(intensity, temp/y_max[k])
+    #    #print(max(temp))
+    #    #print(temp)
     #    energy = np.append(energy, temp1)
     #    temp.clear()
     #    temp1.clear()
 
     del temp
     del temp1
-
-    #for i in range(0, file_numb):
-    #    y_max.append(max(intensity[i]))
-    
+    del imps
+    del angle
+   
     #for l in range(0, file_numb):
     #    for i in range(0, lines[l]):
     #        intensity[l, i] = intensity[l, i]/y_max[l]
@@ -86,7 +91,7 @@ def reader(dirName):
     #            y_err[l, i] = np.sqrt(intensity[l, i])
 
 
-    return energy, intensity, y_err, file_numb, lines
+    return energy, intensity, y_err, y_max, file_numb, lines
 
 def fit_spectrum(dirName):
 
@@ -154,7 +159,7 @@ def Duane_Hunt():
     #for n in range(0, file_numb):
     #    plot_spectrum_w_fit(x_plt[n], y_plt[n], None, params[n], n)
 
-    x_plt, y_plt, y_err, file_numb, lines = reader(voltage_altered)
+    x_plt, y_plt, y_err, y_max, file_numb, lines = reader(voltage_altered)
 
     sum = 0
 
@@ -166,13 +171,18 @@ def Duane_Hunt():
 
     for i in range(0, file_numb):
         if i == 0:
-            plot_spectrum(x_plt[:lines[i]+1], y_plt[:lines[i]+1], None, i)
+            plot_spectrum(x_plt[1:lines[i]+1], y_plt[1:lines[i]+1], None, i)
         elif i < file_numb - 1:
             plot_spectrum(x_plt[sum:sum+lines[i+1]+1], y_plt[sum:sum+lines[i+1]+1], None, i)
         elif i == file_numb - 1:
             plot_spectrum(x_plt[sum:sum+lines[i]+1], y_plt[sum:sum+lines[i]+1], None, i)
         sum += lines[i] + 1
-    
+
+    peaks, _ = find_peaks(y_plt[1:lines[0]+1], height = (0.01, 1), threshold=0.05)
+    for i in range(0,len(peaks)):
+        print(x_plt[peaks[i]])
+
+      
 
     plt.show()
 
