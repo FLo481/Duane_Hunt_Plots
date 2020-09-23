@@ -9,92 +9,177 @@ def linear_fit(x, y0, a):
     return a*x+y0
 
 def Multi_Gauss_fit(x, *p):
-
+    #[y0_1,a_1,xc_1,sigma,y0_2,a_2,xc_2]
     return (p[0] + p[1]*np.exp(-(x-p[2])**2/(2*p[3]**2)) + p[4] + p[5]*np.exp(-(x-p[6])**2/(2*p[3]**2)))
 
 def reader(dirName):
-    imps = [] #recorded counts per seconds
-    angle = [] #measured angle of the goniometer
-    energy = []
-    intensity = []
+    imps = {}
+    angle = {}
+    lines = [] #for counting the lines of the read in files
     tau = 90*10**(-6) #dead time of the Geiger counter
     int_time = 2 #integration time of the detektor in seconds
-    d = 201.4*10**(-12)
-    h = 6.582119569*10**(-16)
-    c = 299792458
+    d = 201.4*10**(-12) #lattice constant for LiF
+    h = 6.582119569*10**(-16) #h in eV*s
+    c = 299792458 #c in m/s
     j = 0 #for skipping the first few lines
+    file_numb = 0 #counts number of files in specified directory
+    temp = []
+    temp1 = []
     
     for root, dirs , files in os.walk(dirName):
         for file in files:
-            #if '.txt' in file:
+            if '.txt' not in file:
                 print("Reading in file " + os.path.join(root, file))
                 with open(os.path.join(root, file)) as f:
                     reader = csv.reader(f, delimiter = '\t')
                     for row in reader:
                         if j > 2:
-                            angle.append(row[0].replace(',','.'))
-                            imps.append(row[1])
+                            #print(j-3, " ", row[0].replace(',', '.'))
+                            imps[file_numb, j - 3] = float(row[1])
+                            angle[file_numb, j - 3] = float(row[0].replace(',', '.'))
+                            
                         j += 1
+                lines.append(j-3)
                 j = 0
+                file_numb += 1 
+    
     
     f.close()
 
-    imps = list(map(float, imps ))
-    angle = list(map(float, angle ))
+    energy = np.empty([], dtype = float)
+    intensity = np.empty([], dtype = float)
+    y_err = np.empty([], dtype = float)
+    y_max = []
 
-    for i in range(0,len(angle)):
-        intensity.append(imps[i]*int_time/(1-tau*imps[i]*int_time))
-        energy.append(h*c/(2*d*np.sin(angle[i]*np.pi/180)))
+    for k in range(0, file_numb):
+        for i in range(0, lines[k]):
+            temp.append(imps[k, i]*int_time/(1-tau*imps[k, i]*int_time))
+            temp1.append(h*c/(2*d*np.sin(angle[k, i]*np.pi/180)*1000))
+        intensity = np.append(intensity, temp)
+        energy = np.append(energy, temp1)
+        temp.clear()
+        temp1.clear()
 
-    #for i in range(len(intensity)):
-    #    print(intensity[i] + " ; " + wavelength[i])
+    #for testing purposes
 
-    return intensity, energy
+    #for k in range(0, file_numb):
+    #    for i in range(0, lines[k]):
+    #        temp.append(imps[k, i])
+    #        temp1.append(angle[k, i])
+    #    intensity = np.append(intensity, temp)
+    #    energy = np.append(energy, temp1)
+    #    temp.clear()
+    #    temp1.clear()
 
-def plot_spectrum():
+    del temp
+    del temp1
 
-    Cu = r"C:\Users\Flo\Desktop\F Praktikum\X Ray\Data\2020-09-22\data\Cu"
-    Test = r"C:\Users\Flo\Desktop\F Praktikum\X Ray\Data\2020-09-22\data\Test"
-    intensity , energy = reader(Test)
-    x_plt = np.empty(len(intensity), dtype = float)
-    y_plt = np.empty(len(intensity), dtype = float)
-    y_err = np.empty(len(intensity), dtype = float)
-    x_min = 0.138
-    x_min1 = 0.153
-    x_max = 0.1575
+    #for i in range(0, file_numb):
+    #    y_max.append(max(intensity[i]))
+    
+    #for l in range(0, file_numb):
+    #    for i in range(0, lines[l]):
+    #        intensity[l, i] = intensity[l, i]/y_max[l]
+    #        if intensity[l, i] == 0.0:
+    #            y_err[l, i] == 0
+    #        else:
+    #            y_err[l, i] = np.sqrt(intensity[l, i])
 
-    y_max = max(intensity)
 
-    for i in range(0, len(intensity)):
-        x_plt[i] = energy[i]/1000
-        y_plt[i] = intensity[i]/y_max
+    return energy, intensity, y_err, file_numb, lines
 
-    for i in range(0, len(y_plt)):
-        if y_plt[i] == 0.0:
-            y_err[i] == 0
-        else:
-            y_err[i] = y_plt[i]/(np.sqrt(y_plt[i]))
+def fit_spectrum(dirName):
 
-    initial_values = [0,0.01,x_min,0.04,0,0.01,x_min1]
-    bounds = ([0,0.01,x_min,0.04,0,0,x_min1],[0.07,0.1,0.141,0.09,0.1,0.5,x_max])
+    energy, intensity, y_err, file_numb, lines = reader(dirName)
 
-    plt.errorbar(x_plt, y_plt, yerr = None, fmt = 'x', markersize = 3 )
-    params, params_cov = scipy.optimize.curve_fit(Multi_Gauss_fit, x_plt, y_plt, p0 = initial_values, bounds = bounds, sigma = None, absolute_sigma = True)
-    plt.plot(x_plt, Multi_Gauss_fit(x_plt, *params))
+    perr = np.empty([file_numb, 7], dtype = float)
+    params = [0]*file_numb
+    params_cov = [0]*file_numb
 
-    print(params[2],"\n" ,params[6])
+    x_min = 1.253
+    x_max = 1.3
+    x_min1 = 1.39
+    x_max1 = 1.43
+
+    #[y0_1,a_1,xc_1,sigma,y0_2,a_2,xc_2]
+    initial_values = [0,0.01,x_min,0.008,0,0.01,x_min1]
+    bounds = ([0,0,x_min,0,0,0,x_min1],[0.06,1,x_max,0.01,0.1,0.5,x_max1])
+
+    for i in range(0, file_numb):
+        params[i], params_cov[i] = scipy.optimize.curve_fit(Multi_Gauss_fit, energy[i], intensity[i], p0 = initial_values, bounds = bounds, sigma = None, absolute_sigma = True)
+        perr[i] = np.sqrt(np.diag(params_cov[i]))/np.sqrt(len(energy[i]))
+    
+    #plt.plot(x_data, Multi_Gauss_fit(x_data, *params))
+
+    for i in range(0, file_numb):
+        print("Center pos. 1 = ", params[i][2], "+/-", perr[i][2], "\n" , "Center pos. 2 = ", params[i][6], "+/-", perr[i][6])
+
+    return params, params_cov, energy, intensity, y_err, file_numb
+
+def plot_spectrum(x_plt, y_plt, y_err, n):
+
+    plt.figure(n)
+    plt.errorbar(x_plt, y_plt, yerr = y_err, fmt = 'x', markersize = 3 )
+    #plt.title()
 
     plt.xlabel("Energy [keV]")
     plt.ylabel("Intensity [arbitrary units]")
-    plt.xlim(1.2,1.8)
     plt.grid()
+
+    return 0
+        
+def plot_spectrum_w_fit(x_plt, y_plt, y_err, params, n):
+
+    plt.figure(n)
+    plt.errorbar(x_plt, y_plt, yerr = y_err, fmt = 'x', markersize = 3 )
+    #plt.title()
+    plt.plot(x_plt, Multi_Gauss_fit(x_plt, *params))
+
+    plt.xlabel("Energy [keV]")
+    plt.ylabel("Intensity [arbitrary units]")
+    plt.grid()
+
+    return 0
+
+def Duane_Hunt():
+
+    current_altered = r"C:\Users\Flo\Desktop\F Praktikum\X Ray\Data\2020-09-22\data\Cu\Current_altered"
+    voltage_altered = r"C:\Users\Flo\Desktop\F Praktikum\X Ray\Data\2020-09-22\data\Cu\Voltage_altered"
+    Test = r"C:\Users\Flo\Desktop\F Praktikum\X Ray\Data\2020-09-22\data\Test"
+
+    #x_plt, y_plt, y_err, file_numb, line_nums = reader(Test)
+    #plot_spectrum(x_plt, y_plt, None)
+    #params, params_cov, x_plt, y_plt, y_err, file_numb = fit_spectrum(voltage_altered)
+    
+    #for n in range(0, file_numb):
+    #    plot_spectrum_w_fit(x_plt[n], y_plt[n], None, params[n], n)
+
+    x_plt, y_plt, y_err, file_numb, lines = reader(voltage_altered)
+
+    sum = 0
+
+    #print(x_plt[0:lines[0]+1])
+    #print(len(y_plt[:lines[0]+1]))
+    #print(len(x_plt[:lines[0]+1]))
+
+    #plot spectra for different voltages or currents
+
+    for i in range(0, file_numb):
+        if i == 0:
+            plot_spectrum(x_plt[:lines[i]+1], y_plt[:lines[i]+1], None, i)
+        elif i < file_numb - 1:
+            plot_spectrum(x_plt[sum:sum+lines[i+1]+1], y_plt[sum:sum+lines[i+1]+1], None, i)
+        elif i == file_numb - 1:
+            plot_spectrum(x_plt[sum:sum+lines[i]+1], y_plt[sum:sum+lines[i]+1], None, i)
+        sum += lines[i] + 1
+    
+
     plt.show()
-    plt.clf()
 
     return 0
 
 def main():
-    plot_spectrum()
+    Duane_Hunt()
 
 if __name__ == "__main__" :
     main()
