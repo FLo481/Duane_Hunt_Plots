@@ -1,5 +1,6 @@
 import os
 import csv
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize
@@ -13,15 +14,19 @@ def Multi_Gauss_fit(x, *p):
     #[y0_1,a_1,xc_1,sigma,y0_2,a_2,xc_2]
     return (p[0] + p[1]*np.exp(-(x-p[2])**2/(2*p[3]**2)) + p[4] + p[5]*np.exp(-(x-p[6])**2/(2*p[3]**2)))
 
+def three_halfs_fit(x, *p):
+
+    return p[0]+p[1]*(x-p[2])**(p[3])
+
 def reader(dirName):
     imps = {}
     angle = {}
+    current_temp = []
+    voltage_temp = []
     lines = [] #for counting the lines of the read in files
     tau = 90*10**(-6) #dead time of the Geiger counter
     int_time = 2 #integration time of the detektor in seconds
     d = 201.4*10**(-12) #lattice constant for LiF
-    h = 6.582119569*10**(-16) #h in eV*s
-    c = 299792458 #c in m/s
     j = 0 #for skipping the first few lines
     file_numb = 0 #counts number of files in specified directory
     temp = []
@@ -31,6 +36,9 @@ def reader(dirName):
         for file in files:
             if '.txt' not in file:
                 print("Reading in file " + os.path.join(root, file))
+                #print(str(file))
+                voltage_temp.append(re.findall(r'\d+', str(file))[4])
+                current_temp.append(re.findall(r'\d+', str(file))[5])
                 with open(os.path.join(root, file)) as f:
                     reader = csv.reader(f, delimiter = '\t')
                     for row in reader:
@@ -44,35 +52,34 @@ def reader(dirName):
                 j = 0
                 file_numb += 1 
     
-    
     f.close()
+
+    voltage = np.empty(len(voltage_temp), dtype = float)
+    current = np.empty(len(current_temp), dtype = float)
+
+    voltage[:] = voltage_temp
+    current[:] = current_temp
 
     energy = np.empty([], dtype = float)
     intensity = np.empty([], dtype = float)
     y_err = np.empty([], dtype = float)
-    y_max = np.empty((0,file_numb), dtype = float)
 
     for k in range(0, file_numb):
         for i in range(0, lines[k]):
             temp.append(float(imps[k, i]*int_time/(1-tau*imps[k, i]*int_time)))
-            temp1.append(float(h*c/(2*d*np.sin(angle[k, i]*np.pi/180)*1000)))
-        y_max = np.append(y_max, max(temp))
-        #print(max(temp), "numpy values ", y_max[k])
-        intensity = np.append(intensity, temp/y_max[k])
+            temp1.append(float(10**(10)*2.0*d*np.sin(angle[k, i]*np.pi/180.0)))
+        intensity = np.append(intensity, temp)
         energy = np.append(energy, temp1)
         temp.clear()
         temp1.clear()
-
+    
     #for testing purposes
 
     #for k in range(0, file_numb):
     #    for i in range(0, lines[k]):
     #        temp.append(imps[k, i])
     #        temp1.append(angle[k, i])
-    #    y_max = np.append(y_max, max(temp))
-    #    intensity = np.append(intensity, temp/y_max[k])
-    #    #print(max(temp))
-    #    #print(temp)
+    #    intensity = np.append(intensity, temp)
     #    energy = np.append(energy, temp1)
     #    temp.clear()
     #    temp1.clear()
@@ -81,21 +88,14 @@ def reader(dirName):
     del temp1
     del imps
     del angle
-   
-    #for l in range(0, file_numb):
-    #    for i in range(0, lines[l]):
-    #        intensity[l, i] = intensity[l, i]/y_max[l]
-    #        if intensity[l, i] == 0.0:
-    #            y_err[l, i] == 0
-    #        else:
-    #            y_err[l, i] = np.sqrt(intensity[l, i])
+    del voltage_temp
+    del current_temp
 
-
-    return energy, intensity, y_err, y_max, file_numb, lines
+    return energy, intensity, file_numb, lines, voltage, current
 
 def fit_spectrum(dirName):
 
-    energy, intensity, y_err, file_numb, lines = reader(dirName)
+    energy, intensity, file_numb, lines, voltage, current = reader(dirName)
 
     perr = np.empty([file_numb, 7], dtype = float)
     params = [0]*file_numb
@@ -119,16 +119,32 @@ def fit_spectrum(dirName):
     for i in range(0, file_numb):
         print("Center pos. 1 = ", params[i][2], "+/-", perr[i][2], "\n" , "Center pos. 2 = ", params[i][6], "+/-", perr[i][6])
 
-    return params, params_cov, energy, intensity, y_err, file_numb
+    return params, params_cov, energy, intensity, y_err, file_numb, voltage, current
 
-def plot_spectrum(x_plt, y_plt, y_err, n):
+def plot_spectrum(x_plt, y_plt, y_err, label, n):
 
     plt.figure(n)
-    plt.errorbar(x_plt, y_plt, yerr = y_err, fmt = 'x', markersize = 3 )
+    plt.errorbar(x_plt, y_plt, yerr = y_err, fmt = 'x', markersize = 3, label = label)
     #plt.title()
 
-    plt.xlabel("Energy [keV]")
-    plt.ylabel("Intensity [arbitrary units]")
+    if n == 1024:
+        params, params_cov = scipy.optimize.curve_fit(three_halfs_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.1,0,1], bounds = ([-500,0,-np.inf,0.5],[1000,100,np.inf,np.inf]), absolute_sigma = True, maxfev = 99999)
+        perr = np.sqrt(np.diag(params_cov))/np.sqrt(x_plt.shape[0])
+        plt.plot(x_plt, three_halfs_fit(x_plt, *params))
+        print("U_K = ", params[2], "+/-", perr[2], "Exponent = ", params[3], "+/-", perr[3])
+        plt.xlabel("Voltage [kV]", fontsize = 16)
+        plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
+    elif n == 2048:
+        params, params_cov = scipy.optimize.curve_fit(three_halfs_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.1,0,1], bounds = ([-500,0,-np.inf,0.5],[1000,100,np.inf,np.inf]), absolute_sigma = True, maxfev = 99999)
+        perr = np.sqrt(np.diag(params_cov))/np.sqrt(x_plt.shape[0])
+        plt.plot(x_plt, three_halfs_fit(x_plt, *params))
+        print("U_K = ", params[2], "+/-", perr[2], "Exponent = ", params[3], "+/-", perr[3])
+        plt.xlabel("Current [mA]", fontsize = 16)
+        plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
+    else:
+        plt.xlabel("Energy [$A^°$]", fontsize = 16)
+        plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
+
     plt.grid()
 
     return 0
@@ -140,11 +156,116 @@ def plot_spectrum_w_fit(x_plt, y_plt, y_err, params, n):
     #plt.title()
     plt.plot(x_plt, Multi_Gauss_fit(x_plt, *params))
 
+  
     plt.xlabel("Energy [keV]")
     plt.ylabel("Intensity [arbitrary units]")
+
     plt.grid()
 
     return 0
+
+def find_maxima(x_plt, y_plt, file_numb, lines):
+
+    sum = 0
+
+    lambda_min = []
+    peaks = [0]*2*file_numb
+    n = [0]*file_numb
+    params1 = [0]*(file_numb-2)
+    params_cov1 = [0]*(file_numb-2)
+    ints_of_max = []
+
+    #print(x_plt[0:lines[0]+1])
+    #print(y_plt[0:lines[0]+1])
+    #print(len(y_plt[:lines[0]+1]))
+    #print(len(x_plt[:lines[0]+1]))
+
+    #plot spectra for different voltages or currents and find K_alpha and K_beta maxima
+
+    for i in range(0, file_numb):
+        print(lines[i])
+        if i == 0:
+            #peak position calculation
+
+            #plot_spectrum(x_plt[1:lines[i]+1], y_plt[1:lines[i]+1], np.sqrt(y_plt[1:lines[i]+1]), "File {}" .format(i), i)
+            peaks[i], _ = find_peaks(y_plt[1:lines[i]+1], height = 100, threshold=20)
+            ints_of_max.append(y_plt[peaks[i][0]+1])
+            ints_of_max.append(y_plt[peaks[i][1]+1])
+            #print("Peak pos. : ", x_plt[peaks[i]+1], "Intensity at peak pos. :", y_plt[peaks[i]+1])
+
+            #lambda_min calculation
+
+            for k in range(1, x_plt[1:lines[i]+1].shape[0]+1):
+                if 1.65 > x_plt[k:lines[i]+1][0] > 1.595:
+                    n[i] += 1
+            params, params_cov = scipy.optimize.curve_fit(linear_fit, x_plt[lines[i]-n[i]+1:lines[i]+1] , y_plt[lines[i]-n[i]+1:lines[i]+1], sigma = np.sqrt( y_plt[lines[i]-n[i]+1:lines[i]+1]), absolute_sigma = True)
+            #plt.plot(x_plt[lines[i]-n[i]+1:lines[i]+1], linear_fit(x_plt[lines[i]-n[i]+1:lines[i]+1], params[0], params[1]))
+            lambda_min.append(-linear_fit(0, params[0], params[1])/params[1])
+        elif i < file_numb - 1:
+            #peak position calculation
+
+            #plot_spectrum(x_plt[sum:sum+lines[i+1]+1], y_plt[sum:sum+lines[i+1]+1], np.sqrt(y_plt[sum:sum+lines[i+1]+1]), "File {}" .format(i), i)
+            peaks[i], _ = find_peaks(y_plt[sum:sum+lines[i+1]+1], height = 120, threshold=80)
+            ints_of_max.append(y_plt[sum+peaks[i][0]])
+            ints_of_max.append(y_plt[sum+peaks[i][1]])
+            #print("Peak pos. : ", x_plt[sum+peaks[i]], "Intensity at peak pos. :", y_plt[sum+peaks[i]])
+            #########################################################################################################################################################################################################################################################################
+            print(y_plt[sum:sum+lines[i+1]]) ### needs to be fixed
+            #########################################################################################################################################################################################################################################################################
+            #lambda_min calculation
+
+            for k in range(sum, sum + x_plt[sum:sum+lines[i+1]+1].shape[0]+1):
+                if 1.65 > x_plt[k:sum+lines[i+1]+2][0] > 1.595:
+                    n[i] += 1
+            #print(sum+lines[i]-n[i]+2, " ", sum+lines[i]+2, n[i])
+            #print(y_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2])
+            params1[i-1], params_cov1[i-1] = scipy.optimize.curve_fit(linear_fit, x_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2] , y_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2], sigma = np.sqrt( y_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2]), absolute_sigma = True)
+            #plt.plot(x_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2], linear_fit(x_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2], params1[i][0], params1[i][1]))
+            #lambda_min.append(-linear_fit(0, params1[i][0], params1[i][1])/params1[i][1])
+        elif i == file_numb - 1:
+            #peak position calculation
+
+            #plot_spectrum(x_plt[sum:sum+lines[i]+1], y_plt[sum:sum+lines[i]+1], np.sqrt( y_plt[sum:sum+lines[i]+1]), "File {}" .format(i), i)
+            peaks[i], _ = find_peaks(y_plt[sum:sum+lines[i]+1], height = 5000, threshold=1000)
+            ints_of_max.append(y_plt[sum+peaks[i][0]])
+            ints_of_max.append(y_plt[sum+peaks[i][1]])
+            #print("Peak pos. : ", x_plt[sum+peaks[i]], "Intensity at peak pos. :", y_plt[sum+peaks[i]])
+
+            #lambda_min calculation
+
+
+        sum += lines[i] + 1
+        
+    del n
+
+    y = np.empty(len(ints_of_max), dtype = float)
+    y[:] = ints_of_max
+    r = len(ints_of_max)
+    r = int(r/2)
+    y_K_alpha = np.empty(r, dtype = float)
+    y_K_beta = np.empty(r, dtype = float)
+    y_K_alpha_err = np.empty(r, dtype = float)
+    y_K_beta_err = np.empty(r, dtype = float)
+
+    for i in range(0, r*2):
+        if i%2 == 0.0:
+            y_K_beta[int(1/2*i)] = y[i]
+            y_K_beta_err[int(1/2*i)] = np.sqrt(y[i])
+        else:
+            y_K_alpha[int(1/2*(i-1))] = y[i]
+            y_K_alpha_err[int(1/2*(i-1))] = np.sqrt(y[i])
+
+    #normalize y axis to one here, otherwise all K_alpha and K_beta lines would have about the same intensity and thus the plot would make no sense
+
+    #y_K_alpha = y_K_alpha/max(y_K_alpha)
+    #y_K_beta = y_K_beta/max(y_K_beta)
+
+    #for i in range(0, r):
+    #    y_K_alpha_err[i] = y_K_alpha[i]*np.sqrt((np.sqrt(max(y_K_alpha))/max(y_K_alpha))**2+(y_K_alpha_err[i]/y_K_alpha[i])**2)
+    #    y_K_beta_err[i] = y_K_beta[i]*np.sqrt((np.sqrt(max(y_K_beta))/max(y_K_beta))**2+(y_K_beta_err[i]/y_K_beta[i])**2)
+
+
+    return y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err
 
 def Duane_Hunt():
 
@@ -159,31 +280,18 @@ def Duane_Hunt():
     #for n in range(0, file_numb):
     #    plot_spectrum_w_fit(x_plt[n], y_plt[n], None, params[n], n)
 
-    x_plt, y_plt, y_err, y_max, file_numb, lines = reader(voltage_altered)
+    x_plt, y_plt, file_numb, lines, voltage, current = reader(voltage_altered)
+    #x_plt1, y_plt1, file_numb1, lines1, voltage1, current1 = reader(current_altered)
 
-    sum = 0
+    y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err =  find_maxima(x_plt, y_plt, file_numb, lines)
+    #y_K_alpha1, y_K_alpha_err1, y_K_beta1, y_K_beta_err1 =  find_maxima(x_plt1, y_plt1, file_numb1, lines1)
 
-    #print(x_plt[0:lines[0]+1])
-    #print(len(y_plt[:lines[0]+1]))
-    #print(len(x_plt[:lines[0]+1]))
+    #plot_spectrum(voltage, y_K_alpha, y_K_alpha_err, "k alpha", 1024)
+    #plot_spectrum(voltage, y_K_beta, y_K_beta_err, "k beta", 1024)
+    #plot_spectrum(current1, y_K_alpha1, y_K_alpha_err1, "k alpha", 2048)
+    #plot_spectrum(current1, y_K_beta1, y_K_beta_err1, "k beta", 2048)
 
-    #plot spectra for different voltages or currents
-
-    for i in range(0, file_numb):
-        if i == 0:
-            plot_spectrum(x_plt[1:lines[i]+1], y_plt[1:lines[i]+1], None, i)
-        elif i < file_numb - 1:
-            plot_spectrum(x_plt[sum:sum+lines[i+1]+1], y_plt[sum:sum+lines[i+1]+1], None, i)
-        elif i == file_numb - 1:
-            plot_spectrum(x_plt[sum:sum+lines[i]+1], y_plt[sum:sum+lines[i]+1], None, i)
-        sum += lines[i] + 1
-
-    peaks, _ = find_peaks(y_plt[1:lines[0]+1], height = (0.01, 1), threshold=0.05)
-    for i in range(0,len(peaks)):
-        print(x_plt[peaks[i]])
-
-      
-
+    plt.legend()
     plt.show()
 
     return 0
