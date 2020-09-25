@@ -120,23 +120,23 @@ def fit_spectrum(dirName):
 
     return params, params_cov, energy, intensity, y_err, file_numb, voltage, current
 
-def plot_spectrum(x_plt, y_plt, y_err, label, n):
+def plot_spectrum(x_plt, y_plt, y_err, n):
 
     plt.figure(n)
-    plt.errorbar(x_plt, y_plt, yerr = y_err, fmt = 'x', markersize = 3, label = label)
+    plt.errorbar(x_plt, y_plt, yerr = y_err, fmt = 'x', markersize = 3)
     #plt.title()
 
     if n == 1024:
-        params, params_cov = scipy.optimize.curve_fit(three_halfs_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.1,0,1], bounds = ([-500,0,-np.inf,0.5],[1000,100,np.inf,np.inf]), absolute_sigma = True, maxfev = 99999)
+        params, params_cov = scipy.optimize.curve_fit(three_halfs_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.01,0.01,1], bounds = ([-500,0,0,0.5],[500,100,50,5]), absolute_sigma = True, maxfev = 99999)
         perr = np.sqrt(np.diag(params_cov))/np.sqrt(x_plt.shape[0])
-        plt.plot(x_plt, three_halfs_fit(x_plt, *params))
+        figure, = plt.plot(x_plt, three_halfs_fit(x_plt, *params))
         print("U_K = ", params[2], "+/-", perr[2], "Exponent = ", params[3], "+/-", perr[3])
         plt.xlabel("Voltage [kV]", fontsize = 16)
         plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
     elif n == 2048:
-        params, params_cov = scipy.optimize.curve_fit(three_halfs_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.1,0,1], bounds = ([-500,0,-np.inf,0.5],[1000,100,np.inf,np.inf]), absolute_sigma = True, maxfev = 99999)
+        params, params_cov = scipy.optimize.curve_fit(three_halfs_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.1,0.1,1], bounds = ([-200,0,0.1,1],[4000,np.inf,50,50]), absolute_sigma = True, maxfev = 99999)
         perr = np.sqrt(np.diag(params_cov))/np.sqrt(x_plt.shape[0])
-        plt.plot(x_plt, three_halfs_fit(x_plt, *params))
+        figure, = plt.plot(x_plt, three_halfs_fit(x_plt, *params))
         print("U_K = ", params[2], "+/-", perr[2], "Exponent = ", params[3], "+/-", perr[3])
         plt.xlabel("Current [mA]", fontsize = 16)
         plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
@@ -146,7 +146,7 @@ def plot_spectrum(x_plt, y_plt, y_err, label, n):
 
     plt.grid()
 
-    return 0
+    return figure
         
 def plot_spectrum_w_fit(x_plt, y_plt, y_err, params, n):
 
@@ -180,7 +180,6 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
     #print(len(x_plt[:lines[0]+1]))
 
     #plot spectra for different voltages or currents and find K_alpha and K_beta maxima
-    print(lines)
 
     for i in range(0, file_numb):
         #print(lines[i])
@@ -207,7 +206,7 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
             #peak position calculation
 
             #plot_spectrum(x_plt[sum+1:sum+lines[i]+1], y_plt[sum+1:sum+lines[i]+1], np.sqrt(y_plt[sum+1:sum+lines[i]+1]), "File {}" .format(i), i)
-            peaks[i], _ = find_peaks(y_plt[sum:sum+lines[i+1]+1], height = 120, threshold=80)
+            peaks[i], _ = find_peaks(y_plt[sum+1:sum+lines[i]+1], height = 120, threshold=80)
             ints_of_max.append(y_plt[sum+peaks[i][0]])
             ints_of_max.append(y_plt[sum+peaks[i][1]])
             #print("Peak pos. : ", x_plt[sum+peaks[i]], "Intensity at peak pos. :", y_plt[sum+peaks[i]])
@@ -227,8 +226,8 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
         elif i == file_numb - 1:
             #peak position calculation
 
-            #plot_spectrum(x_plt[sum:sum+lines[i]+1], y_plt[sum:sum+lines[i]+1], np.sqrt( y_plt[sum:sum+lines[i]+1]), "File {}" .format(i), i)
-            peaks[i], _ = find_peaks(y_plt[sum:sum+lines[i]+1], height = 5000, threshold = 1000)
+            #plot_spectrum(x_plt[sum+1:sum+lines[i]+1], y_plt[sum+1:sum+lines[i]+1], np.sqrt(y_plt[sum+1:sum+lines[i]+1]), "File {}" .format(i), i)
+            peaks[i], _ = find_peaks(y_plt[sum+1:sum+lines[i]+1], height = 5000, threshold = 1000)
             ints_of_max.append(y_plt[sum+peaks[i][0]])
             ints_of_max.append(y_plt[sum+peaks[i][1]])
             #print("Peak pos. : ", x_plt[sum+peaks[i]], "Intensity at peak pos. :", y_plt[sum+peaks[i]])
@@ -237,6 +236,13 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
 
             #lambda_min calculation
 
+            for k in range(sum, sum + x_plt[sum+1:sum+lines[i]+1].shape[0]+1):
+                if 1.65 > x_plt[k:sum+lines[i]+1][0] > 1.595:
+                    n[i] += 1
+            #print(y_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2])
+            #params1[i-1], params_cov1[i-1] = scipy.optimize.curve_fit(linear_fit, x_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2] , y_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2], sigma = np.sqrt( y_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2]), absolute_sigma = True)
+            #plt.plot(x_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2], linear_fit(x_plt[sum+lines[i]-n[i]+2:sum+lines[i]+2], params1[i][0], params1[i][1]))
+            #lambda_min.append(-linear_fit(0, params1[i][0], params1[i][1])/params1[i][1])
 
         sum += lines[i]
         
@@ -271,31 +277,45 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
 
     return y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err
 
-def Duane_Hunt():
+def voltage_dep_spectrum():
 
     current_altered = r"C:\Users\Flo\Desktop\F Praktikum\X Ray\Data\2020-09-22\data\Cu\Current_altered"
+
+    x_plt1, y_plt1, file_numb1, lines1, voltage1, current1 = reader(current_altered)
+
+    y_K_alpha1, y_K_alpha_err1, y_K_beta1, y_K_beta_err1 =  find_maxima(x_plt1, y_plt1, file_numb1, lines1)
+
+    figure = plot_spectrum(current1, y_K_alpha1, y_K_alpha_err1, 2048)
+    figure1 = plot_spectrum(current1, y_K_beta1, y_K_beta_err1, 2048)
+
+    plt.legend(handles=[figure, figure1],labels=[r"$K_{\alpha}$ lines",r"$K_{\beta}$ lines"])
+
+    return 0
+
+def current_dep_spectrum():
+
     voltage_altered = r"C:\Users\Flo\Desktop\F Praktikum\X Ray\Data\2020-09-22\data\Cu\Voltage_altered"
+
+    x_plt, y_plt, file_numb, lines, voltage, current = reader(voltage_altered)
+
+    y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err =  find_maxima(x_plt, y_plt, file_numb, lines)
+
+    figure = plot_spectrum(voltage, y_K_alpha, y_K_alpha_err, 1024)
+    figure1 = plot_spectrum(voltage, y_K_beta, y_K_beta_err, 1024)
+
+    plt.legend(handles=[figure, figure1],labels=[r"$K_{\alpha}$ lines",r"$K_{\beta}$ lines"])
+
+    return 0
+
+def Duane_Hunt():
+
     Test = r"C:\Users\Flo\Desktop\F Praktikum\X Ray\Data\2020-09-22\data\Test"
 
     #x_plt, y_plt, y_err, file_numb, line_nums = reader(Test)
-    #plot_spectrum(x_plt, y_plt, None)
-    #params, params_cov, x_plt, y_plt, y_err, file_numb = fit_spectrum(voltage_altered)
-    
-    #for n in range(0, file_numb):
-    #    plot_spectrum_w_fit(x_plt[n], y_plt[n], None, params[n], n)
 
-    x_plt, y_plt, file_numb, lines, voltage, current = reader(voltage_altered)
-    #x_plt1, y_plt1, file_numb1, lines1, voltage1, current1 = reader(current_altered)
+    #voltage_dep_spectrum()
+    current_dep_spectrum()
 
-    y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err =  find_maxima(x_plt, y_plt, file_numb, lines)
-    #y_K_alpha1, y_K_alpha_err1, y_K_beta1, y_K_beta_err1 =  find_maxima(x_plt1, y_plt1, file_numb1, lines1)
-
-    #plot_spectrum(voltage, y_K_alpha, y_K_alpha_err, "k alpha", 1024)
-    #plot_spectrum(voltage, y_K_beta, y_K_beta_err, "k beta", 1024)
-    #plot_spectrum(current1, y_K_alpha1, y_K_alpha_err1, "k alpha", 2048)
-    #plot_spectrum(current1, y_K_beta1, y_K_beta_err1, "k beta", 2048)
-
-    plt.legend()
     plt.show()
 
     return 0
