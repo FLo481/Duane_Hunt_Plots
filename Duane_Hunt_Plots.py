@@ -25,7 +25,6 @@ def reader(dirName):
     voltage_temp = []
     lines = [] #for counting the lines of the read in files
     tau = 90*10**(-6) #dead time of the Geiger counter
-    int_time = 2 #integration time of the detektor in seconds
     d = 201.4*10**(-12) #lattice constant for LiF
     j = 0 #for skipping the first few lines
     file_numb = 0 #counts number of files in specified directory
@@ -66,7 +65,7 @@ def reader(dirName):
 
     for k in range(0, file_numb):
         for i in range(0, lines[k]):
-            temp.append(float(imps[k, i]*int_time/(1-tau*imps[k, i]*int_time)))
+            temp.append(float(2*imps[k, i]/(1-tau*imps[k, i])))
             temp1.append(float(10**(10)*2.0*d*np.sin(angle[k, i]*np.pi/180.0)))
         intensity = np.append(intensity, temp)
         energy = np.append(energy, temp1)
@@ -181,9 +180,10 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
     #print(len(x_plt[:lines[0]+1]))
 
     #plot spectra for different voltages or currents and find K_alpha and K_beta maxima
+    print(lines)
 
     for i in range(0, file_numb):
-        print(lines[i])
+        #print(lines[i])
         if i == 0:
             #peak position calculation
 
@@ -192,6 +192,8 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
             ints_of_max.append(y_plt[peaks[i][0]+1])
             ints_of_max.append(y_plt[peaks[i][1]+1])
             #print("Peak pos. : ", x_plt[peaks[i]+1], "Intensity at peak pos. :", y_plt[peaks[i]+1])
+
+            #print("File number ", i+1, " : " ,y_plt[1:lines[i]+1]) ### correct counting for the indices
 
             #lambda_min calculation
 
@@ -204,14 +206,14 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
         elif i < file_numb - 1:
             #peak position calculation
 
-            #plot_spectrum(x_plt[sum:sum+lines[i+1]+1], y_plt[sum:sum+lines[i+1]+1], np.sqrt(y_plt[sum:sum+lines[i+1]+1]), "File {}" .format(i), i)
+            #plot_spectrum(x_plt[sum+1:sum+lines[i]+1], y_plt[sum+1:sum+lines[i]+1], np.sqrt(y_plt[sum+1:sum+lines[i]+1]), "File {}" .format(i), i)
             peaks[i], _ = find_peaks(y_plt[sum:sum+lines[i+1]+1], height = 120, threshold=80)
             ints_of_max.append(y_plt[sum+peaks[i][0]])
             ints_of_max.append(y_plt[sum+peaks[i][1]])
             #print("Peak pos. : ", x_plt[sum+peaks[i]], "Intensity at peak pos. :", y_plt[sum+peaks[i]])
-            #########################################################################################################################################################################################################################################################################
-            print(y_plt[sum:sum+lines[i+1]]) ### needs to be fixed
-            #########################################################################################################################################################################################################################################################################
+
+            #print("File number ", i+1, " : " ,y_plt[sum+1:sum+lines[i]+1]) ### correct counting for the indices
+
             #lambda_min calculation
 
             for k in range(sum, sum + x_plt[sum:sum+lines[i+1]+1].shape[0]+1):
@@ -226,15 +228,17 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
             #peak position calculation
 
             #plot_spectrum(x_plt[sum:sum+lines[i]+1], y_plt[sum:sum+lines[i]+1], np.sqrt( y_plt[sum:sum+lines[i]+1]), "File {}" .format(i), i)
-            peaks[i], _ = find_peaks(y_plt[sum:sum+lines[i]+1], height = 5000, threshold=1000)
+            peaks[i], _ = find_peaks(y_plt[sum:sum+lines[i]+1], height = 5000, threshold = 1000)
             ints_of_max.append(y_plt[sum+peaks[i][0]])
             ints_of_max.append(y_plt[sum+peaks[i][1]])
             #print("Peak pos. : ", x_plt[sum+peaks[i]], "Intensity at peak pos. :", y_plt[sum+peaks[i]])
 
+            #print("File number ", i+1, " : " ,y_plt[sum+1:sum+lines[i]+1]) ### correct counting for the indices
+
             #lambda_min calculation
 
 
-        sum += lines[i] + 1
+        sum += lines[i]
         
     del n
 
