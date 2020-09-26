@@ -182,17 +182,12 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
 
             #lambda_min calculation
 
-            for k in range(1, x_plt[1:lines[i]+1].shape[0]+1):
-                if 1.65 > x_plt[k:lines[i]+1][0] > 1.565:
-                    n += 1
-                    #print(y_plt[k:lines[i]+1][0])
-                if x_plt[k:lines[i]+1][0] < 1.565:
-                    numb += 1
-            params[i], params_cov[i] = scipy.optimize.curve_fit(lambda_min_fit, x_plt[numb:numb+n] , y_plt[numb:numb+n], sigma = np.sqrt( y_plt[numb:numb+n]), absolute_sigma = True)
-            #plt.plot(x_plt[numb:numb+n], lambda_min_fit(x_plt[numb:numb+n], params[i][0], params[i][1]))
-            lambda_min.append(-lambda_min_fit(0, params[i][0], params[i][1])/params[i][1])
-            n = 0
-            numb = 0
+            for k in range(sum + 1 , sum + lines[i] + 1):
+                if 1.2 > x_plt[k] > 1.1:
+                    if y_plt[k]-y_plt[k-1] >= 4:
+                        lambda_min.append(x_plt[k])
+                        break
+          
         elif i < file_numb - 1:
             #peak position calculation
 
@@ -207,16 +202,11 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
             #lambda_min calculation
 
             for k in range(sum + 1 , sum + lines[i] + 1):
-                if 1.38 > x_plt[k] > 1.0:
-                    n += 1
-                    #print(y_plt[k])
-                if x_plt[k] < 1.0:
-                    numb += 1
-            params[i], params_cov[i] = scipy.optimize.curve_fit(lambda_min_fit, x_plt[sum+numb:sum+numb+n] , y_plt[sum+numb:sum+numb+n], sigma = np.sqrt( y_plt[sum+numb:sum+numb+n]), absolute_sigma = True)
-            #plt.plot(x_plt[sum+numb:sum+numb+n], lambda_min_fit(x_plt[sum+numb:sum+numb+n], params[i][0], params[i][1]))
-            lambda_min.append(-lambda_min_fit(0, params[i][0], params[i][1])/params[i][1])
-            n = 0
-            numb = 0
+                if 1.05 > x_plt[k] > 0.35:
+                    if y_plt[k]-y_plt[k-1] >= 10:
+                        lambda_min.append(x_plt[k])
+                        break
+
         elif i == file_numb - 1:
             #peak position calculation
 
@@ -231,10 +221,10 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
             #lambda_min calculation
 
             for k in range(sum + 1, sum + lines[i] + 1):
-                if 1.35 > x_plt[k] > 1.0:
+                if 0.438 > x_plt[k] > 0.35:
                     n += 1
                     #print(y_plt[k])
-                if x_plt[k] < 1.0:
+                if x_plt[k] < 0.35:
                     numb += 1
             params[i], params_cov[i] = scipy.optimize.curve_fit(lambda_min_fit, x_plt[sum+numb:sum+numb+n] , y_plt[sum+numb:sum+numb+n], sigma = np.sqrt( y_plt[sum+numb:sum+numb+n]), absolute_sigma = True)
             #plt.plot(x_plt[sum+numb:sum+numb+n], lambda_min_fit(x_plt[sum+numb:sum+numb+n], params[i][0], params[i][1]))
@@ -303,18 +293,27 @@ def lambda_min_plot():
 
     y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err, lambda_min =  find_maxima(x_plt, y_plt, file_numb, lines)
 
-    #print(lambda_min)
-
     #plt.errorbar(1/voltage,  lambda_min, yerr = [0.5]*len(lambda_min), fmt = 'x', markersize = 3)
 
     c0 = 299792458
     qe = 1.602176634*10**(-19)
 
-    plt.errorbar(1/(voltage[3:len(voltage)]),  lambda_min[3:len(lambda_min)], yerr = [0.5]*(len(lambda_min)-3), fmt = 'x', markersize = 3)
-    params, params_cov = scipy.optimize.curve_fit(lambda_min_fit,1/(voltage[3:len(voltage)]) , lambda_min[3:len(lambda_min)], sigma = [0.5]*(len(lambda_min)-3), absolute_sigma = True)
-    plt.plot( 1/(voltage[3:len(voltage)]), lambda_min_fit( 1/(voltage[3:len(voltage)]), params[0], params[1]))
-    perr = np.sqrt(np.diag(params_cov))/np.sqrt(len(voltage)-3)
-    print("h = ", params[1]*qe/(c0)*10**(-13), "+/-", perr[1]*qe/(c0)*10**(-13))
+    y_err = []
+
+    for i in range(0,len(lambda_min)):
+        y_err.append(0.5*10**(-10))
+        lambda_min[i] = lambda_min[i]*10**(-10)
+        voltage[i] = voltage[i]*1000
+
+    plt.errorbar(1/(voltage), lambda_min, yerr = y_err, fmt = 'x', markersize = 3)
+    params, params_cov = scipy.optimize.curve_fit(lambda_min_fit, 1/voltage , lambda_min, sigma = y_err, absolute_sigma = True)
+    plt.plot(1/voltage, lambda_min_fit( 1/voltage, params[0], params[1]))
+    perr = np.sqrt(np.diag(params_cov))/np.sqrt(len(voltage))
+
+    print("h = ", params[1]*qe/(c0), "+/-", perr[1]*qe/(c0))
+
+    plt.xlabel(r"$U_A$ [$(kV)^{-1}$]", fontsize = 16)
+    plt.ylabel(r"Wavelength [$A^°$]", fontsize = 16)
 
     return 0
 
