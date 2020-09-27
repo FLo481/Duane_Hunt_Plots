@@ -368,6 +368,7 @@ def Duane_Hunt():
 def Moseley_law():
 
     #order of array entries Fe, Cu, Mo
+    ###
 
     h = 6.582119567**(-16) # in eV s
 
