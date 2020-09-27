@@ -10,6 +10,10 @@ def linear_fit(x, *p):
 
     return p[0] + p[1]*(x-p[2])
 
+def Moseley_fit(x, *p):
+
+    return p[0]*(x-p[1])
+
 def lambda_min_fit(x, y0, a):
 
     return y0+a*x
@@ -92,38 +96,12 @@ def reader(dirName):
 
     return energy, intensity, file_numb, lines, voltage, current
 
-def fit_spectrum(dirName):
-
-    energy, intensity, file_numb, lines, voltage, current = reader(dirName)
-
-    perr = np.empty([file_numb, 7], dtype = float)
-    params = [0]*file_numb
-    params_cov = [0]*file_numb
-
-    x_min = 1.253
-    x_max = 1.3
-    x_min1 = 1.39
-    x_max1 = 1.43
-
-    #[y0_1,a_1,xc_1,sigma,y0_2,a_2,xc_2]
-    initial_values = [0,0.01,x_min,0.008,0,0.01,x_min1]
-    bounds = ([0,0,x_min,0,0,0,x_min1],[0.06,1,x_max,0.01,0.1,0.5,x_max1])
-
-    for i in range(0, file_numb):
-        params[i], params_cov[i] = scipy.optimize.curve_fit(Multi_Gauss_fit, energy[i], intensity[i], p0 = initial_values, bounds = bounds, sigma = None, absolute_sigma = True)
-        perr[i] = np.sqrt(np.diag(params_cov[i]))/np.sqrt(len(energy[i]))
-    
-    #plt.plot(x_data, Multi_Gauss_fit(x_data, *params))
-
-    for i in range(0, file_numb):
-        print("Center pos. 1 = ", params[i][2], "+/-", perr[i][2], "\n" , "Center pos. 2 = ", params[i][6], "+/-", perr[i][6])
-
-    return params, params_cov, energy, intensity, y_err, file_numb, voltage, current
-
 def plot_spectrum(x_plt, y_plt, y_err, n):
 
     plt.figure(n)
     figure = 0
+    chi_squared = 0
+    fit_func = np.empty(len(x_plt), dtype = float)
     data = plt.errorbar(x_plt, y_plt, yerr = y_err, fmt = 'x', markersize = 3)
     #plt.title()
 
@@ -131,17 +109,31 @@ def plot_spectrum(x_plt, y_plt, y_err, n):
         params, params_cov = scipy.optimize.curve_fit(three_halfs_fit, x_plt, y_plt, sigma = y_err,  p0 = [-100,0.01,0.01,1], bounds = ([-500,0,0,0.5],[500,100,50,5]), absolute_sigma = True, maxfev = 99999)
         perr = np.sqrt(np.diag(params_cov))/np.sqrt(x_plt.shape[0])
         figure, = plt.plot(x_plt, three_halfs_fit(x_plt, *params))
+
+        fit_func[:] = three_halfs_fit(x_plt, *params)
+
+        for i in range(0, len(x_plt)):
+            chi_squared += (y_plt[i]-fit_func[i])**2/(y_err[i])**2
+
+        print("red. Chi squared = ", chi_squared/(len(x_plt)-4))
+
         print("Voltage dependent data :")
         print("U_K = ", params[2], "+/-", perr[2], "Exponent = ", params[3], "+/-", perr[3])
         plt.xlabel("Voltage [kV]", fontsize = 16)
         plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
     elif n == 2048:
-        #params, params_cov = scipy.optimize.curve_fit(three_halfs_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.1,0.1,1], bounds = ([-500,0,0.1,1],[4000,np.inf,50,50]), absolute_sigma = True, maxfev = 99999)
         params, params_cov = scipy.optimize.curve_fit(linear_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.1,0.1], bounds = ([-100,0,0.1],[4000,np.inf,100]), absolute_sigma = True, maxfev = 99999)
         perr = np.sqrt(np.diag(params_cov))/np.sqrt(x_plt.shape[0])
         figure, = plt.plot(x_plt, linear_fit(x_plt, *params))
+
+        fit_func[:] = linear_fit(x_plt, *params)
+
+        for i in range(0, len(x_plt)):
+            chi_squared += (y_plt[i]-fit_func[i])**2/(y_err[i])**2
+
+        print("red. Chi squared = ", chi_squared/(len(x_plt)-3))
+
         print("Current dependent data :")
-        #print("U_K = ", params[2], "+/-", perr[2], "Exponent = ", params[3], "+/-", perr[3])
         print("U_K = ", params[2], "+/-", perr[2], "Slope = ", params[1], "+/-", perr[1])
         plt.xlabel("Current [mA]", fontsize = 16)
         plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
@@ -226,6 +218,9 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
                     #print(y_plt[k])
                 if x_plt[k] < 0.35:
                     numb += 1
+
+            #uncomment for lambda_min calculations
+
             params[i], params_cov[i] = scipy.optimize.curve_fit(lambda_min_fit, x_plt[sum+numb:sum+numb+n] , y_plt[sum+numb:sum+numb+n], sigma = np.sqrt( y_plt[sum+numb:sum+numb+n]), absolute_sigma = True)
             #plt.plot(x_plt[sum+numb:sum+numb+n], lambda_min_fit(x_plt[sum+numb:sum+numb+n], params[i][0], params[i][1]))
             lambda_min.append(-lambda_min_fit(0, params[i][0], params[i][1])/params[i][1])
@@ -261,12 +256,12 @@ def current_dep_spectrum():
 
     x_plt, y_plt, file_numb, lines, voltage, current = reader(current_altered)
 
-    y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err =  find_maxima(x_plt, y_plt, file_numb, lines)
+    y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err, _=  find_maxima(x_plt, y_plt, file_numb, lines)
 
     data, figure = plot_spectrum(current, y_K_alpha, y_K_alpha_err, 2048)
     data1, figure1 = plot_spectrum(current, y_K_beta, y_K_beta_err, 2048)
 
-    plt.legend(handles=[data, data1, figure, figure1],labels=[r"$K_{\alpha}$ lines",r"$K_{\beta}$ lines",r"Linear fit",r"Linear fit"], prop={'size': 12})
+    plt.legend(handles=[data, data1, figure, figure1], labels=[r"$K_{\alpha}$ lines",r"$K_{\beta}$ lines",r"Linear fit",r"Linear fit"], prop={'size': 12})
 
     return 0
 
@@ -278,10 +273,10 @@ def voltage_dep_spectrum():
 
     y_K_alpha, y_K_alpha_err, y_K_beta, y_K_beta_err, _ =  find_maxima(x_plt, y_plt, file_numb, lines)
 
-    #data, figure = plot_spectrum(voltage, y_K_alpha, y_K_alpha_err, 1024)
-    #data1, figure1 = plot_spectrum(voltage, y_K_beta, y_K_beta_err, 1024)
+    data, figure = plot_spectrum(voltage, y_K_alpha, y_K_alpha_err, 1024)
+    data1, figure1 = plot_spectrum(voltage, y_K_beta, y_K_beta_err, 1024)
 
-    #plt.legend(handles=[data, data1, figure, figure1],labels=[r"$K_{\alpha}$ lines",r"$K_{\beta}$ lines",r"$a+b(U_A-c)^{3/2}$ fit",r"$a+b(U_A-c)^{3/2}$ fit"], prop={'size': 12})
+    plt.legend(handles=[data, data1, figure, figure1], labels=[r"$K_{\alpha}$ lines",r"$K_{\beta}$ lines",r"$a+b(U_A-c)^{3/2}$ fit",r"$a+b(U_A-c)^{3/2}$ fit"], prop={'size': 12})
 
     return 0
 
@@ -297,24 +292,63 @@ def lambda_min_plot():
 
     c0 = 299792458
     qe = 1.602176634*10**(-19)
+    d = 201.4*10**(-12)
 
     y_err = []
+    sin_theta = []
+    sin_theta_err = []
 
     for i in range(0,len(lambda_min)):
         y_err.append(0.5*10**(-10))
         lambda_min[i] = lambda_min[i]*10**(-10)
         voltage[i] = voltage[i]*1000
+        sin_theta.append(lambda_min[i]/(2*d))
+        sin_theta_err.append(np.sqrt(y_err[i]/(2*d))**2)
 
-    plt.errorbar(1/(voltage), lambda_min, yerr = y_err, fmt = 'x', markersize = 3)
+    fig, ax1 = plt.subplots()
+    ax1.errorbar(1/(voltage), lambda_min, yerr = y_err, fmt = 'x', markersize = 3)
+    ax1.set_ylabel(r"Wavelength [$A^°$]", fontsize = 16)
+    ax1.set_xlabel(r"$1/U_A$ [$(kV)^{-1}$]", fontsize = 16)
+
+    ax2 = ax1.twinx()
+    data = ax2.errorbar(1/(voltage), sin_theta, yerr = sin_theta_err, fmt = 'bx', markersize = 5)
+    ax2.set_ylabel(r"$\sin\theta$", fontsize = 16)
+
+    labels = [item.get_text() for item in ax1.get_xticklabels()]
+    labels1 = [item.get_text() for item in ax1.get_yticklabels()]
+    for i in range(0,len(labels)):
+        labels[i] = i + 2
+    for i in range(0,len(labels1)):
+        labels1[i] = 0.25*i - 0.5
+
+    ax1.set_xticklabels(labels)
+    ax1.set_yticklabels(labels1)
+
+    #plt.errorbar(1/(voltage), lambda_min, yerr = y_err, fmt = 'x', markersize = 3)
+    #plt.errorbar(1/(voltage), sin_theta, yerr = sin_theta_err, fmt = 'x', markersize = 3)
     params, params_cov = scipy.optimize.curve_fit(lambda_min_fit, 1/voltage , lambda_min, sigma = y_err, absolute_sigma = True)
-    plt.plot(1/voltage, lambda_min_fit( 1/voltage, params[0], params[1]))
+    fit, = ax1.plot(1/voltage, lambda_min_fit( 1/voltage, params[0], params[1]))
     perr = np.sqrt(np.diag(params_cov))/np.sqrt(len(voltage))
 
     print("h = ", params[1]*qe/(c0), "+/-", perr[1]*qe/(c0))
 
-    plt.xlabel(r"$U_A$ [$(kV)^{-1}$]", fontsize = 16)
-    plt.ylabel(r"Wavelength [$A^°$]", fontsize = 16)
+    #plt.ylabel(r"Wavelength [$A^°$]", fontsize = 16)
 
+    fig.tight_layout()
+    fig.legend(handles=[data, fit], labels=[r"$\lambda_{min}$ of bremsstrahlung","Linear fit"], prop = {'size': 12}, bbox_to_anchor=(0.57,0.95))
+
+    #red chi squared calculation
+
+    chi_squared = 0
+    fit_func = np.empty(len(voltage), dtype = float)
+    fit_func[:] = lambda_min_fit(1/voltage, params[0], params[1])
+
+    for i in range(0, len(voltage)):
+        chi_squared += (lambda_min[i]-fit_func[i])**2/(y_err[i])**2
+
+    print("red. Chi squared = ", chi_squared/(len(voltage)-2))
+
+    
     return 0
 
 def Duane_Hunt():
@@ -331,8 +365,51 @@ def Duane_Hunt():
 
     return 0
 
+def Moseley_law():
+
+    #order of array entries Fe, Cu, Mo
+
+    h = 6.582119567**(-16) # in eV s
+
+    x_alpha = np.array([26, 29, 42], dtype = float)
+    y_alpha = np.array([6403, 8050, 17800], dtype = float)
+    y_alpha_err = np.array([35, 34, 400], dtype = float)
+    x_beta = np.array([26, 29, 42], dtype = float)
+    y_beta = np.array([7057, 8910, 19670], dtype = float)
+    y_beta_err = np.array([44, 42, 500], dtype = float)
+
+    for i in range(0, len(x_alpha)):
+        y_alpha[i] = np.sqrt(y_alpha[i]/h)
+        y_alpha_err[i] = np.sqrt(y_alpha_err[i]/h)
+        y_beta[i] = np.sqrt(y_beta[i]/h)
+        y_beta_err[i] = np.sqrt(y_beta_err[i]/h)
+
+    data = plt.errorbar(x_alpha, y_alpha, yerr = y_alpha_err, fmt = 'x', markersize= 5)
+    params, params_cov = scipy.optimize.curve_fit(Moseley_fit, x_alpha , y_alpha, sigma = y_alpha_err, p0=[5, 0], bounds = ([-np.inf,-np.inf],[np.inf, np.inf]), absolute_sigma = True)
+    perr = np.sqrt(np.diag(params_cov))/np.sqrt(len(x_alpha))
+    fit, = plt.plot(x_alpha, Moseley_fit(x_alpha, *params))
+    print("Ry = ", params[0]**2*h*4/3, "+/-", perr[0]**2*h*4/3, "\t sigma = ", params[1], "+/-", perr[1] )
+    print(params)
+
+    data1 = plt.errorbar(x_beta, y_beta, yerr = y_beta_err, fmt = 'x', markersize= 5)
+    params1, params_cov1 = scipy.optimize.curve_fit(Moseley_fit, x_beta , y_beta, sigma = y_beta_err, p0=[5, 0], bounds = ([-np.inf, -10],[np.inf, 10]), absolute_sigma = True)
+    perr1 = np.sqrt(np.diag(params_cov1))/np.sqrt(len(x_beta))
+    fit1, = plt.plot(x_beta, Moseley_fit(x_beta, *params1))
+    print("Ry = ", params1[0]**2*h*9/8, "+/-", perr1[0]**2*h*9/8, "\t sigma = ", params1[1], "+/-", perr1[1] )
+
+    plt.xlabel(r"Proton number Z", fontsize = 16)
+    plt.ylabel(r"$\sqrt{f}$ [$(Hz)^{-1/2}$]", fontsize = 16)
+    plt.legend(handles=[data, data1, fit, fit1], labels=[r"$K_\alpha$ lines of Fe, Cu and Mo", r"$K_\beta$ lines of Fe, Cu and Mo", r"Moseley's law fit", r"Moseley's law fit"])
+
+    plt.grid()
+    plt.show()
+
+
+    return 0
+
 def main():
-    Duane_Hunt()
+    #Duane_Hunt()
+    Moseley_law()
 
 if __name__ == "__main__" :
     main()
