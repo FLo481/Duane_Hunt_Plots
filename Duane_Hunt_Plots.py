@@ -8,7 +8,7 @@ from scipy.signal import find_peaks
 
 def linear_fit(x, *p):
 
-    return p[0] + p[1]*(x-p[2])
+    return p[1]*x
 
 def Moseley_fit(x, *p):
 
@@ -115,12 +115,12 @@ def plot_spectrum(x_plt, y_plt, y_err, n):
         for i in range(0, len(x_plt)):
             chi_squared += (y_plt[i]-fit_func[i])**2/(y_err[i])**2
 
-        print("red. Chi squared = ", chi_squared/(len(x_plt)-4))
-
+        
         print("Voltage dependent data :")
+        print("red. Chi squared = ", chi_squared/(len(x_plt)-4))
         print("U_K = ", params[2], "+/-", perr[2], "Exponent = ", params[3], "+/-", perr[3])
         plt.xlabel("Voltage [kV]", fontsize = 16)
-        plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
+        plt.ylabel("Counts", fontsize = 16)
     elif n == 2048:
         params, params_cov = scipy.optimize.curve_fit(linear_fit, x_plt, y_plt, sigma = y_err, p0 = [-100,0.1,0.1], bounds = ([-100,0,0.1],[4000,np.inf,100]), absolute_sigma = True, maxfev = 99999)
         perr = np.sqrt(np.diag(params_cov))/np.sqrt(x_plt.shape[0])
@@ -131,12 +131,11 @@ def plot_spectrum(x_plt, y_plt, y_err, n):
         for i in range(0, len(x_plt)):
             chi_squared += (y_plt[i]-fit_func[i])**2/(y_err[i])**2
 
-        print("red. Chi squared = ", chi_squared/(len(x_plt)-3))
-
         print("Current dependent data :")
-        print("U_K = ", params[2], "+/-", perr[2], "Slope = ", params[1], "+/-", perr[1])
+        print("red. Chi squared = ", chi_squared/(len(x_plt)-3))
+        print("Slope = ", params[1], "+/-", perr[1])
         plt.xlabel("Current [mA]", fontsize = 16)
-        plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
+        plt.ylabel("Counts", fontsize = 16)
     else:
         plt.xlabel("Energy [$A^°$]", fontsize = 16)
         plt.ylabel("Intensity [arbitrary units]", fontsize = 16)
@@ -221,11 +220,11 @@ def find_maxima(x_plt, y_plt, file_numb, lines):
 
             #uncomment for lambda_min calculations
 
-            params[i], params_cov[i] = scipy.optimize.curve_fit(lambda_min_fit, x_plt[sum+numb:sum+numb+n] , y_plt[sum+numb:sum+numb+n], sigma = np.sqrt( y_plt[sum+numb:sum+numb+n]), absolute_sigma = True)
+            #params[i], params_cov[i] = scipy.optimize.curve_fit(lambda_min_fit, x_plt[sum+numb:sum+numb+n] , y_plt[sum+numb:sum+numb+n], sigma = np.sqrt( y_plt[sum+numb:sum+numb+n]), absolute_sigma = True)
             #plt.plot(x_plt[sum+numb:sum+numb+n], lambda_min_fit(x_plt[sum+numb:sum+numb+n], params[i][0], params[i][1]))
-            lambda_min.append(-lambda_min_fit(0, params[i][0], params[i][1])/params[i][1])
-            n = 0
-            numb = 0
+            #lambda_min.append(-lambda_min_fit(0, params[i][0], params[i][1])/params[i][1])
+            #n = 0
+            #numb = 0
 
         sum += lines[i]
         
@@ -276,7 +275,7 @@ def voltage_dep_spectrum():
     data, figure = plot_spectrum(voltage, y_K_alpha, y_K_alpha_err, 1024)
     data1, figure1 = plot_spectrum(voltage, y_K_beta, y_K_beta_err, 1024)
 
-    plt.legend(handles=[data, data1, figure, figure1], labels=[r"$K_{\alpha}$ lines",r"$K_{\beta}$ lines",r"$a+b(U_A-c)^{3/2}$ fit",r"$a+b(U_A-c)^{3/2}$ fit"], prop={'size': 12})
+    plt.legend(handles=[data, data1, figure, figure1], labels=[r"$K_{\alpha}$ lines",r"$K_{\beta}$ lines",r"$a+b\cdot(U_A-c)^{d}$ fit",r"$a+b\cdot(U_A-c)^{d}$ fit"], prop={'size': 12})
 
     return 0
 
@@ -357,9 +356,9 @@ def Duane_Hunt():
 
     #x_plt, y_plt, y_err, file_numb, line_nums = reader(Test)
 
-    #voltage_dep_spectrum()
+    voltage_dep_spectrum()
     #current_dep_spectrum()
-    lambda_min_plot()
+    #lambda_min_plot()
 
     plt.show()
 
@@ -390,7 +389,6 @@ def Moseley_law():
     perr = np.sqrt(np.diag(params_cov))/np.sqrt(len(x_alpha))
     fit, = plt.plot(x_alpha, Moseley_fit(x_alpha, *params))
     print("Ry = ", params[0]**2*h*4/3, "+/-", perr[0]**2*h*4/3, "\t sigma = ", params[1], "+/-", perr[1] )
-    print(params)
 
     data1 = plt.errorbar(x_beta, y_beta, yerr = y_beta_err, fmt = 'x', markersize= 5)
     params1, params_cov1 = scipy.optimize.curve_fit(Moseley_fit, x_beta , y_beta, sigma = y_beta_err, p0=[5, 0], bounds = ([-np.inf, -10],[np.inf, 10]), absolute_sigma = True)
@@ -409,8 +407,8 @@ def Moseley_law():
     return 0
 
 def main():
-    #Duane_Hunt()
-    Moseley_law()
+    Duane_Hunt()
+    #Moseley_law()
 
 if __name__ == "__main__" :
     main()
